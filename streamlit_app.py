@@ -132,12 +132,21 @@ def main():
                 order_id = entered_order_id.strip()
                 st.session_state.manual_order_id = order_id
                 # Update query params to include the order_id for URL sharing
-                st.experimental_set_query_params(order_id=order_id)
+                st.query_params.update(order_id=order_id)
                 st.success(f"Order ID {order_id} submitted. Processing...")
                 st.rerun()
             elif submitted and not entered_order_id.strip():
                 st.error("Please enter a valid Order ID")
                 st.stop()
+        
+        # Sample Order IDs for testing
+        st.markdown("### Sample Order IDs for Testing")
+        st.markdown("""
+        You can use these sample IDs for testing:
+        - `3252550000507549272` - YMCA department logo
+        - `3252550000485072160` - Vermont Fraternal Order of Police
+        - `3252550000482448702` - Eagle coin design
+        """)
         
         if not order_id:  # Still no order_id after form handling
             st.stop()
