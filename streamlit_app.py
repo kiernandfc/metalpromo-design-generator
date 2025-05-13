@@ -115,9 +115,32 @@ def main():
     query_params = st.query_params
     order_id = query_params.get("order_id")
 
+    # Allow manual order_id entry if not present in URL
     if not order_id:
-        st.warning("Please provide an order_id in the URL, e.g., ?order_id=12345")
-        st.stop()
+        st.info("No order ID found in URL parameters.")
+        
+        # Initialize session state for manual order_id if not exists
+        if "manual_order_id" not in st.session_state:
+            st.session_state.manual_order_id = ""
+        
+        # Create a form for order_id entry
+        with st.form("order_id_form"):
+            entered_order_id = st.text_input("Enter Order ID:", value=st.session_state.manual_order_id)
+            submitted = st.form_submit_button("Load Order Data")
+            
+            if submitted and entered_order_id.strip():
+                order_id = entered_order_id.strip()
+                st.session_state.manual_order_id = order_id
+                # Update query params to include the order_id for URL sharing
+                st.experimental_set_query_params(order_id=order_id)
+                st.success(f"Order ID {order_id} submitted. Processing...")
+                st.rerun()
+            elif submitted and not entered_order_id.strip():
+                st.error("Please enter a valid Order ID")
+                st.stop()
+        
+        if not order_id:  # Still no order_id after form handling
+            st.stop()
 
     # Initialize session state for roles if not already present for this order_id
     if f"roles_{order_id}" not in st.session_state:
@@ -276,7 +299,7 @@ def main():
         elif not edited_challenge_notes.strip() and not image_data_for_backend:
              st.warning("Please provide some design notes or at least one reference image (PDF or image file) with a role other than 'Ignore'.")
         else:
-            with st.spinner("Generating design variations..."):
+            with st.spinner("Generating design variations... (may take ~60 seconds)"):
                 # Get the prompt modifiers to show in the UI
                 from prompt_modifiers import load_prompt_modifiers
                 prompt_styles = load_prompt_modifiers()
