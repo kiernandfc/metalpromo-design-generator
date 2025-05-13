@@ -1,18 +1,16 @@
 # zoho_adapter.py
-import os
 import requests # Will be used for actual API calls
-from dotenv import load_dotenv
 import json # For pretty printing and the new parser
 from typing import Optional, Dict, Any # For type hinting
 
-# Load environment variables from .env file
-load_dotenv()
-
-ZOHO_CLIENT_ID = os.getenv("ZOHO_CLIENT_ID")
-ZOHO_CLIENT_SECRET = os.getenv("ZOHO_CLIENT_SECRET")
-ZOHO_REFRESH_TOKEN = os.getenv("ZOHO_REFRESH_TOKEN")
-ZOHO_API_BASE_URL = os.getenv("ZOHO_API_BASE_URL", "https://www.zohoapis.com")
-ZOHO_TOKEN_URL = os.getenv("ZOHO_TOKEN_URL", "https://accounts.zoho.com/oauth/v2/token")
+# Import credentials from shared config module (works with both Streamlit secrets and .env)
+from config import (
+    ZOHO_CLIENT_ID,
+    ZOHO_CLIENT_SECRET,
+    ZOHO_REFRESH_TOKEN,
+    ZOHO_API_BASE_URL,
+    ZOHO_TOKEN_URL
+)
 
 def get_access_token():
     """

@@ -1,11 +1,16 @@
 import streamlit as st
-from zoho_adapter import get_note_from_zoho, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
-from openai_adapter import generate_image_with_multiple_inputs, OPENAI_API_KEY # Ensure OPENAI_API_KEY is imported
 import base64 
 import io     
 import requests
 import fitz  # PyMuPDF
 from PIL import Image # Pillow for image type detection if needed, though mimetypes or extension is fine
+
+# Import from shared config module
+from config import ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, OPENAI_API_KEY
+
+# Import adapter functions
+from zoho_adapter import get_note_from_zoho
+from openai_adapter import generate_image_with_multiple_inputs
 
 IMAGE_ROLE_OPTIONS = ["Ignore", "Front of coin mockup", "Back of coin mockup", "Logo to include", "Other reference image"]
 
@@ -93,15 +98,19 @@ def get_file_data_for_display_and_openai(file_url):
         return None, None, None
 
 def main():
-    st.set_page_config(layout="wide")
-    # st.title("MetalPromo AI Design Assistant") # Title moved down to avoid duplication with the one in main logic
+    st.set_page_config(
+        page_title="MetalPromo Coin Design Inspiration Generator",
+        page_icon="🪙",
+        layout="wide"
+    )
+    # Title moved down to avoid duplication with the one in main logic
 
     # --- Main App Logic ---
     if not all([ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN]):
         st.error("Zoho CRM credentials are not configured. Please set them in your .env file.")
         st.stop()
 
-    st.title("Metalpromo Design Generator")
+    st.title("MetalPromo Coin Design Inspiration Generator")
 
     query_params = st.query_params
     order_id = query_params.get("order_id")

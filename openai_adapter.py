@@ -1,8 +1,6 @@
 # openai_adapter.py
 
-import os
 import openai
-from dotenv import load_dotenv
 import requests # For downloading images from URLs
 import io       # For handling byte streams
 import base64   # For handling b64_json response
@@ -13,15 +11,14 @@ from typing import List, Union, Dict, Tuple, Any
 # Import the prompt modifiers
 from prompt_modifiers import load_prompt_modifiers
 
-# Load environment variables from .env file
-load_dotenv()
+# Import credentials from shared config module (works with both Streamlit secrets and .env)
+from config import OPENAI_API_KEY
 
-# Load API key securely
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Set up OpenAI client
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 else:
-    print("Warning: OPENAI_API_KEY not found in .env file or environment variables.")
+    print("Warning: OPENAI_API_KEY not found in Streamlit secrets or .env file.")
 
 client = None
 if openai.api_key:
