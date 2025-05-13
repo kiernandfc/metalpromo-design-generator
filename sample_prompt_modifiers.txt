@@ -1,0 +1,14 @@
+🎯 Prompt 1: "Heritage & Symbolism"
+Design a custom coin centered around the provided overall theme. You are given two input files—please use them as specified: one may be used without modification (e.g. a logo), while the other may be used as inspiration only (e.g. a reference sketch). Incorporate symbolic elements that reflect legacy, history, or tradition. If a location is provided, subtly weave in cultural or historical references from that region. The design should feel timeless and dignified, like a keepsake or heirloom.
+
+🧠 Prompt 2: "Modern Minimalist with a Twist"
+Create a sleek, modern coin design based on the overall theme. Respect the usage instructions for the input files—include any file marked as “use without modification” exactly as it is, and interpret others more loosely for stylistic inspiration. If a location is provided, let it influence a minimalist symbol or accent. The coin should emphasize negative space, clean lines, and balance, while still feeling unique and memorable.
+
+🖼️ Prompt 3: "Illustrative & Detailed Art Coin"
+Generate an intricate, artistically rich coin design using the overall theme. Follow instructions on the input files: embed any “use without modification” elements precisely, and freely draw inspiration from the other(s) for visual motifs, linework, or texture. If a location is provided, incorporate regional elements like local animals, plants, landscapes, or folklore into the border, background, or fine details of the coin.
+
+🔧 Prompt 4: "Functional + Industrial Aesthetic"
+Design a coin that looks purpose-built and engineered, rooted in the overall theme. Treat the input files according to their usage instructions—any that must appear exactly should be integrated cleanly into the layout, while others can be used for conceptual or stylistic inspiration. If a location is included, borrow from local industry, architecture, or technology. The coin should have a strong, tactile design, possibly featuring engraved layers or structural patterns.
+
+🎖️ Prompt 5: "Military Commemorative Coin"
+Create a military-themed custom coin that honors service, unit identity, or a specific operation—anchored in the provided theme. Respect the usage instructions for the input files: embed required elements exactly, and interpret inspirational references for layout, iconography, or atmosphere. If a location is provided, incorporate symbols, units, insignias, or terrain relevant to that region’s military history. The coin should evoke strength, unity, and respect.
