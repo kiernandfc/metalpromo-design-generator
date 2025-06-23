@@ -129,9 +129,15 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
     try:
         style_info = f" Style: {modifier_title}" if modifier_title else ""
         print(f"Calling OpenAI images.edit with 'gpt-image-1'.{style_info} Number of images: {len(image_bytes_list)}")
-
+        
+        # Log more details about the request
+        print(f"Full prompt (truncated): {full_prompt[:200]}{'...' if len(full_prompt) > 200 else ''}")
+        print(f"Image bytes list contains {len(image_bytes_list)} images")
+        for i, img_bytes in enumerate(image_bytes_list):
+            print(f"  Image {i+1} - Size: {img_bytes.getbuffer().nbytes} bytes, Name: {getattr(img_bytes, 'name', 'unnamed')}")
+        
         # Assuming 'gpt-image-1' is used with the .edit() endpoint and supports a list for 'image'.
-        # The user's example implies 'client.images.edit(model="gpt-image-1", image=[...], prompt=...)'
+        print("About to make API call to OpenAI...")
         response = client.images.edit(
             model="gpt-image-1", # As specified by user
             image=image_bytes_list, # List of image byte streams
@@ -141,6 +147,7 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
             quality="high",
             background='transparent'
         )
+        print("API call to OpenAI completed successfully")
 
         # print(f"Full OpenAI API response object: {response}")
         if response.data and len(response.data) > 0:
@@ -182,6 +189,16 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
         try:
             error_details = e.response.json() # Attempt to parse JSON response
             print(f"Error details (JSON): {error_details}")
+            # Extract more specific error information if available
+            if isinstance(error_details, dict):
+                if 'error' in error_details:
+                    error_obj = error_details['error']
+                    if isinstance(error_obj, dict):
+                        error_type = error_obj.get('type', 'unknown')
+                        error_code = error_obj.get('code', 'unknown')
+                        error_param = error_obj.get('param', 'unknown')
+                        error_msg = error_obj.get('message', 'No specific message')
+                        print(f"Detailed error info - Type: {error_type}, Code: {error_code}, Param: {error_param}, Message: {error_msg}")
             error_message = str(error_details)
         except Exception as json_e:
             print(f"Could not parse error response as JSON: {json_e}")
@@ -189,16 +206,24 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
             print(f"Raw error response text: {error_text}")
             error_message = error_text
 
-        # Example: Check for model not found or invalid input errors
+        # Check for specific error conditions
         if e.status_code == 404 and "model_not_found" in str(e.response).lower():
             print("Error: The model 'gpt-image-1' was not found. Please ensure it's available for your API key and correctly named.")
         elif e.status_code == 400:
-            print(f"Error: Invalid request (400). This could be due to incorrect parameters for 'gpt-image-1', image format issues, or other input problems: {e.response}")
+            print(f"Error: Invalid request (400). This could be due to incorrect parameters for 'gpt-image-1', image format issues, or other input problems.")
+            # Check for common image-related errors
+            if "invalid_image" in str(e.response).lower():
+                print("The error appears to be related to invalid image format or content.")
+            elif "content_policy_violation" in str(e.response).lower():
+                print("The error appears to be related to content policy violation.")
+        elif e.status_code == 429:
+            print("Error: Rate limit exceeded. You may need to wait before making more requests.")
+        
         return {"style": modifier_title if modifier_title else "Standard", "success": False, "error": error_message}
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-        # import traceback
-        # traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         return {"style": modifier_title if modifier_title else "Standard", "success": False, "error": str(e)}
 
 
@@ -222,26 +247,49 @@ def _generate_multiple_variations(prompt_text: str, input_images_data: List[Dict
     max_workers = min(5, len(PROMPT_MODIFIERS))  # Limit to 5 concurrent requests
     print(f"Generating {len(PROMPT_MODIFIERS)} design variations in parallel...")
     
-    # Assign the five different prompt modifiers from the file
+    # Log input data for debugging
+    print(f"Input prompt text: {prompt_text[:100]}{'...' if len(prompt_text) > 100 else ''}")
+    print(f"Number of input images: {len(input_images_data)}")
+    for i, img_data in enumerate(input_images_data):
+        print(f"  Image {i+1} - Role: {img_data.get('role', 'N/A')}, Data URI length: {len(img_data.get('image_data_uri', ''))}")
+    
+    # Assign the different prompt modifiers from the file
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
-        for modifier in PROMPT_MODIFIERS:
+        for i, modifier in enumerate(PROMPT_MODIFIERS):
+            print(f"Submitting generation task for style: {modifier[0]}")
             # Submit each generation task to the executor
             future = executor.submit(_generate_single_image, prompt_text, input_images_data, modifier)
-            futures.append(future)
+            futures.append((future, modifier))
         
         # Collect results as they complete
-        for future in concurrent.futures.as_completed(futures):
+        for future, modifier in [(f, m) for f, m in futures]:
             try:
+                print(f"Waiting for result from style: {modifier[0]}...")
                 result = future.result()
                 if result:
+                    print(f"Successfully generated design for style: {modifier[0]}")
                     results.append(result)
+                else:
+                    print(f"Failed to generate design for style: {modifier[0]} - result was None")
+                    results.append({"style": modifier[0], "success": False, "error": "Generation returned None"})
             except Exception as e:
-                print(f"Error in parallel image generation: {e}")
+                print(f"Error in parallel image generation for style {modifier[0]}: {e}")
+                import traceback
+                traceback.print_exc()
                 # Create a result entry for the failed generation
-                results.append({"style": "Unknown", "success": False, "error": str(e)})
+                results.append({"style": modifier[0], "success": False, "error": str(e)})
     
     print(f"Generated {len(results)} design variations.")
+    print(f"Successful designs: {len([r for r in results if r.get('success', False)])}")
+    print(f"Failed designs: {len([r for r in results if not r.get('success', False)])}")
+    
+    # If all designs failed, log a more detailed error
+    if len([r for r in results if r.get('success', False)]) == 0:
+        print("CRITICAL ERROR: All design variations failed to generate!")
+        for i, result in enumerate(results):
+            print(f"  Failure {i+1} - Style: {result.get('style', 'Unknown')}, Error: {result.get('error', 'Unknown error')}")
+    
     return results
 
 if __name__ == '__main__':

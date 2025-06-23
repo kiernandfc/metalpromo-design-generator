@@ -315,11 +315,19 @@ def main():
                 style_names = [style[0] for style in prompt_styles]
                 
                 # Pass the edited notes and the list of image data dicts to generate multiple variations
-                image_response_list = generate_image_with_multiple_inputs(
-                    prompt_text=edited_challenge_notes, 
-                    input_images_data=image_data_for_backend,
-                    parallel=True  # Enable parallel generation of multiple variations
-                )
+                st.info("Starting design generation with OpenAI. This may take up to 60 seconds...")
+                try:
+                    image_response_list = generate_image_with_multiple_inputs(
+                        prompt_text=edited_challenge_notes, 
+                        input_images_data=image_data_for_backend,
+                        parallel=True  # Enable parallel generation of multiple variations
+                    )
+                except Exception as e:
+                    st.error(f"Exception occurred during design generation: {str(e)}")
+                    import traceback
+                    error_details = traceback.format_exc()
+                    st.code(error_details, language="python")
+                    image_response_list = []
                 
                 if image_response_list and len(image_response_list) > 0:
                     st.subheader("Generated Design Variations")
@@ -378,7 +386,36 @@ def main():
                     
                     st.success(f"Successfully generated {len(successful_designs)} design variations!")
                 else:
-                    st.error("Failed to generate any design variations. Check the console logs for more details from the OpenAI adapter.")
+                    st.error("Failed to generate any design variations.")
+                    
+                    # Display detailed error information
+                    with st.expander("View Error Details"):
+                        st.write("### Error Information")
+                        st.write("No successful design variations were generated. Here's what we know:")
+                        
+                        # Check if we have any failed designs with error information
+                        failed_designs = [result for result in image_response_list if not result.get("success", False)]
+                        
+                        if failed_designs:
+                            st.write(f"Found {len(failed_designs)} failed design attempts:")
+                            for i, result in enumerate(failed_designs):
+                                st.error(f"**Style {result.get('style', 'Unknown')} Error:** {result.get('error', 'Unknown error')}")
+                        else:
+                            st.write("No specific error information was returned from the OpenAI adapter.")
+                            
+                        # Display input information for debugging
+                        st.write("### Input Information")
+                        st.write(f"Prompt text length: {len(edited_challenge_notes)} characters")
+                        st.write(f"Number of input images: {len(image_data_for_backend)}")
+                        for i, img_data in enumerate(image_data_for_backend):
+                            st.write(f"Image {i+1} - Role: {img_data.get('role', 'N/A')}, Data URI length: {len(img_data.get('image_data_uri', ''))}")
+                            
+                        st.write("Please check the server logs for more detailed error information.")
+                        st.write("If the problem persists, try with different images or a modified prompt.")
+                    
+                    # Suggest possible solutions
+                    st.info("Possible solutions: Try using different reference images, ensure images are in a supported format (JPEG, PNG), or modify your design notes.")
+                    
 
 if __name__ == '__main__':
     main()
