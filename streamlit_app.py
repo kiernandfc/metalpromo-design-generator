@@ -330,61 +330,64 @@ def main():
                     image_response_list = []
                 
                 if image_response_list and len(image_response_list) > 0:
-                    st.subheader("Generated Design Variations")
-                    st.write("We've generated multiple design variations based on different style directives. Select your favorite!")
-                    
-                    # Create tabs for the different design styles
-                    tabs = st.tabs([result.get("style", "Unknown") for result in image_response_list if result.get("success", False)])
-                    
+                    # Get successful designs first
                     successful_designs = [result for result in image_response_list if result.get("success", False)]
                     
-                    for i, (tab, result) in enumerate(zip(tabs, successful_designs)):
-                        with tab:
-                            st.write(f"**Style: {result.get('style', 'Unknown')}**")
-                            
-                            # Display the image
-                            url = result.get("url")
-                            b64_json = result.get("b64_json")
-                            
-                            if url:  # If we have a URL
-                                try:
-                                    response = requests.get(url, timeout=10)
-                                    response.raise_for_status()
-                                    img = Image.open(io.BytesIO(response.content))
-                                    # Resize to maintain aspect ratio with max dimensions 400x400
-                                    img.thumbnail((400, 400), Image.LANCZOS)
-                                    img_byte_arr = io.BytesIO()
-                                    img.save(img_byte_arr, format=img.format or 'PNG')
-                                    img_byte_arr.seek(0)
-                                    st.image(img_byte_arr, caption=f"Design Variation {i+1}: {result.get('style', 'Unknown')}", width=400)
-                                except Exception as e:
-                                    st.warning(f"Error resizing URL image: {e}. Displaying original size.")
-                                    st.image(url, caption=f"Design Variation {i+1}: {result.get('style', 'Unknown')}", width=400)
-                            
-                            elif b64_json:  # If we have base64 JSON data
-                                try:
-                                    image_bytes = base64.b64decode(b64_json)
-                                    # Create a PIL Image to resize to 400x400 pixels
-                                    img = Image.open(io.BytesIO(image_bytes))
-                                    # Resize to maintain aspect ratio with max dimensions 400x400
-                                    img.thumbnail((400, 400), Image.LANCZOS)
-                                    img_byte_arr = io.BytesIO()
-                                    img.save(img_byte_arr, format=img.format or 'PNG')
-                                    img_byte_arr.seek(0)
-                                    st.image(img_byte_arr, caption=f"Design Variation {i+1}: {result.get('style', 'Unknown')}", width=400)
-                                except Exception as e:
-                                    st.error(f"Failed to decode or display b64_json image: {e}")
-                                    st.text_area("Raw b64_json response (first 100 chars):", value=str(b64_json)[:100], height=50)
+                    if successful_designs:
+                        st.subheader("Generated Design Variations")
+                        st.write("We've generated multiple design variations based on different style directives. Select your favorite!")
+                        
+                        # Create tabs for the different design styles - only if we have successful designs
+                        tab_labels = [result.get("style", "Unknown") for result in successful_designs]
+                        tabs = st.tabs(tab_labels)
+                        
+                        for i, (tab, result) in enumerate(zip(tabs, successful_designs)):
+                            with tab:
+                                st.write(f"**Style: {result.get('style', 'Unknown')}**")
+                                
+                                # Display the image
+                                url = result.get("url")
+                                b64_json = result.get("b64_json")
+                                
+                                if url:  # If we have a URL
+                                    try:
+                                        response = requests.get(url, timeout=10)
+                                        response.raise_for_status()
+                                        img = Image.open(io.BytesIO(response.content))
+                                        # Resize to maintain aspect ratio with max dimensions 400x400
+                                        img.thumbnail((400, 400), Image.LANCZOS)
+                                        img_byte_arr = io.BytesIO()
+                                        img.save(img_byte_arr, format=img.format or 'PNG')
+                                        img_byte_arr.seek(0)
+                                        st.image(img_byte_arr, caption=f"Design Variation {i+1}: {result.get('style', 'Unknown')}", width=400)
+                                    except Exception as e:
+                                        st.warning(f"Error resizing URL image: {e}. Displaying original size.")
+                                        st.image(url, caption=f"Design Variation {i+1}: {result.get('style', 'Unknown')}", width=400)
+                                
+                                elif b64_json:  # If we have base64 JSON data
+                                    try:
+                                        image_bytes = base64.b64decode(b64_json)
+                                        # Create a PIL Image to resize to 400x400 pixels
+                                        img = Image.open(io.BytesIO(image_bytes))
+                                        # Resize to maintain aspect ratio with max dimensions 400x400
+                                        img.thumbnail((400, 400), Image.LANCZOS)
+                                        img_byte_arr = io.BytesIO()
+                                        img.save(img_byte_arr, format=img.format or 'PNG')
+                                        img_byte_arr.seek(0)
+                                        st.image(img_byte_arr, caption=f"Design Variation {i+1}: {result.get('style', 'Unknown')}", width=400)
+                                    except Exception as e:
+                                        st.error(f"Failed to decode or display b64_json image: {e}")
+                                        st.text_area("Raw b64_json response (first 100 chars):", value=str(b64_json)[:100], height=50)
                     
-                    # Display any errors that occurred
-                    failed_designs = [result for result in image_response_list if not result.get("success", False)]
-                    if failed_designs:
-                        st.warning(f"Some design variations failed to generate ({len(failed_designs)} out of {len(image_response_list)}).")
-                        with st.expander("View Errors"):
-                            for i, result in enumerate(failed_designs):
-                                st.write(f"**Style {result.get('style', 'Unknown')} Error:** {result.get('error', 'Unknown error')}")
-                    
-                    st.success(f"Successfully generated {len(successful_designs)} design variations!")
+                        # Display any errors that occurred
+                        failed_designs = [result for result in image_response_list if not result.get("success", False)]
+                        if failed_designs:
+                            st.warning(f"Some design variations failed to generate ({len(failed_designs)} out of {len(image_response_list)}).")
+                            with st.expander("View Errors"):
+                                for i, result in enumerate(failed_designs):
+                                    st.write(f"**Style {result.get('style', 'Unknown')} Error:** {result.get('error', 'Unknown error')}")
+                        
+                        st.success(f"Successfully generated {len(successful_designs)} design variations!")
                 else:
                     st.error("Failed to generate any design variations.")
                     
