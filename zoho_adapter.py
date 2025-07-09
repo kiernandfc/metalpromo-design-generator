@@ -59,6 +59,8 @@ def _parse_note_content_to_dict(note_content_str: str) -> Dict[str, Optional[str
     """
     Parses a string of key-value pairs (separated by ': ') into a dictionary.
     Extracts a predefined set of keys.
+    Specifically handles challenge_notes by extracting all content between 
+    'challenge_notes:' and '\nchallenge_shape_notes:' markers.
     If the content isn't in key-value format, treats it as challenge_notes.
     """
     parsed_data: Dict[str, Optional[str]] = {}
@@ -75,9 +77,33 @@ def _parse_note_content_to_dict(note_content_str: str) -> Dict[str, Optional[str
         ]:
             parsed_data[key] = None
         return parsed_data
-
+    
+    # First, extract challenge_notes specially since it may contain newlines
+    challenge_notes = None
+    challenge_notes_start = note_content_str.find("challenge_notes:")
+    if challenge_notes_start != -1:
+        # Find the start of the challenge_notes value (after the colon)
+        value_start = challenge_notes_start + len("challenge_notes:")
+        
+        # Find the next marker after challenge_notes
+        next_marker = note_content_str.find("\nchallenge_shape_notes:", value_start)
+        if next_marker != -1:
+            challenge_notes = note_content_str[value_start:next_marker].strip()
+            print(f"DEBUG: Extracted challenge_notes with newlines. First 50 chars: {challenge_notes[:50]}...")
+            raw_fields["challenge_notes"] = challenge_notes
+            
+            # Create a modified string for the rest of the parsing by removing the challenge_notes section
+            # We'll replace it with a simple placeholder that won't be processed again
+            note_content_str = (note_content_str[:challenge_notes_start] + 
+                               "challenge_notes: [EXTRACTED]" + 
+                               note_content_str[next_marker:])
+    
     # Check for URLs in the content which might be files
     for line in note_content_str.strip().split('\n'):
+        # Skip the placeholder we inserted
+        if line.strip() == "challenge_notes: [EXTRACTED]":
+            continue
+            
         if "http" in line and "." in line:
             # This could be a file URL, check for common patterns
             if "first_file:" not in line.lower() and "second_file:" not in line.lower():
@@ -123,8 +149,11 @@ def _parse_note_content_to_dict(note_content_str: str) -> Dict[str, Optional[str
                 raw_fields["date"] = value
             elif key in ["organization", "org", "company", "organization_name", "organization name"]:
                 raw_fields["organization_name"] = value
+            # Skip challenge_notes key-value processing as we've already handled it specially
             elif key in ["notes", "challenge notes", "challenge_notes"]:
-                raw_fields["challenge_notes"] = value
+                # Only set if we haven't extracted it specially earlier
+                if "challenge_notes" not in raw_fields:
+                    raw_fields["challenge_notes"] = value
             elif key in ["size", "challenge size", "challenge_size"]:
                 raw_fields["challenge_size"] = value
             elif key in ["file1", "first file", "first_file"]:

@@ -94,10 +94,10 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
         for i, img_data in enumerate(input_images_data):
             full_prompt += f"\n- Image {i+1} (Role: {img_data.get('role', 'N/A')})"
 
-    # Validation: Ensure there's at least one image to process if the list was provided.
+    # Check if input images are provided, but don't require them
     if not input_images_data:
-        print("Error: No input images provided to process.") # Should be caught by Streamlit UI ideally
-        return None
+        print("Note: No input images provided. Proceeding with text-only prompt.")
+        # Continue with text-only prompt instead of returning None
 
     image_bytes_list = []
     for i, image_item in enumerate(input_images_data):
@@ -122,31 +122,47 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
             print(f"Failed to process input image from image_data_uri: {e}")
             continue # Skip this image but try to continue with others handle partial failures differently, e.g., by skipping the image
 
-    if not image_bytes_list:
-        print("Error: No valid images could be processed from the provided image_data_uris.")
-        return None
+    # If no valid images could be processed, we'll use the images.generate endpoint instead of images.edit
+    use_generate_endpoint = len(image_bytes_list) == 0
+    if use_generate_endpoint:
+        print("No valid images could be processed. Using images.generate endpoint instead of images.edit.")
+        # We'll continue with the text-only prompt
 
     try:
         style_info = f" Style: {modifier_title}" if modifier_title else ""
-        print(f"Calling OpenAI images.edit with 'gpt-image-1'.{style_info} Number of images: {len(image_bytes_list)}")
         
         # Log more details about the request
         print(f"Full prompt (truncated): {full_prompt[:200]}{'...' if len(full_prompt) > 200 else ''}")
-        print(f"Image bytes list contains {len(image_bytes_list)} images")
-        for i, img_bytes in enumerate(image_bytes_list):
-            print(f"  Image {i+1} - Size: {img_bytes.getbuffer().nbytes} bytes, Name: {getattr(img_bytes, 'name', 'unnamed')}")
         
-        # Assuming 'gpt-image-1' is used with the .edit() endpoint and supports a list for 'image'.
-        print("About to make API call to OpenAI...")
-        response = client.images.edit(
-            model="gpt-image-1", # As specified by user
-            image=image_bytes_list, # List of image byte streams
-            prompt=full_prompt, # Use the combined prompt
-            n=1, # Number of images to generate
-            size="1024x1024", # Specify a supported size
-            quality="high",
-            background='transparent'
-        )
+        if use_generate_endpoint:
+            # Use the images.generate endpoint when no images are provided
+            print(f"Calling OpenAI images.generate with 'dall-e-3'.{style_info}")
+            print("About to make API call to OpenAI using images.generate...")
+            response = client.images.generate(
+                model="dall-e-3", # Using DALL-E 3 for text-to-image generation
+                prompt=full_prompt, # Use the combined prompt
+                n=1, # Number of images to generate
+                size="1024x1024", # Specify a supported size
+                quality="hd",
+                style="vivid" # More photorealistic style
+            )
+        else:
+            # Use the images.edit endpoint when images are provided
+            print(f"Calling OpenAI images.edit with 'gpt-image-1'.{style_info} Number of images: {len(image_bytes_list)}")
+            print(f"Image bytes list contains {len(image_bytes_list)} images")
+            for i, img_bytes in enumerate(image_bytes_list):
+                print(f"  Image {i+1} - Size: {img_bytes.getbuffer().nbytes} bytes, Name: {getattr(img_bytes, 'name', 'unnamed')}")
+            
+            print("About to make API call to OpenAI using images.edit...")
+            response = client.images.edit(
+                model="gpt-image-1", # As specified by user
+                image=image_bytes_list, # List of image byte streams
+                prompt=full_prompt, # Use the combined prompt
+                n=1, # Number of images to generate
+                size="1024x1024", # Specify a supported size
+                quality="high",
+                background='transparent'
+            )
         print("API call to OpenAI completed successfully")
 
         # print(f"Full OpenAI API response object: {response}")
