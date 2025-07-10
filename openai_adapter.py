@@ -7,6 +7,16 @@ import base64   # For handling b64_json response
 import concurrent.futures # For parallel processing
 import time  # For tracking parallel requests
 from typing import List, Union, Dict, Tuple, Any
+import json
+import random
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('openai_adapter')
 
 # Import the prompt modifiers
 from prompt_modifiers import load_prompt_modifiers
@@ -132,37 +142,54 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
         style_info = f" Style: {modifier_title}" if modifier_title else ""
         
         # Log more details about the request
+        request_id = f"req_{int(time.time())}_{random.randint(1000, 9999)}"
+        logger.info(f"[{request_id}] Starting OpenAI request - {style_info}")
         print(f"Full prompt (truncated): {full_prompt[:200]}{'...' if len(full_prompt) > 200 else ''}")
+        
+        # Compute and log prompt length for debugging
+        prompt_length = len(full_prompt)
+        total_bytes = sum([img.getbuffer().nbytes for img in image_bytes_list]) if image_bytes_list else 0
+        logger.info(f"[{request_id}] Request stats - Prompt length: {prompt_length} chars, Total image bytes: {total_bytes}")
         
         if use_generate_endpoint:
             # Use the images.generate endpoint when no images are provided
-            print(f"Calling OpenAI images.generate with 'dall-e-3'.{style_info}")
-            print("About to make API call to OpenAI using images.generate...")
+            print(f"Calling OpenAI images.generate with 'gpt-image-1'.{style_info}")
+            logger.info(f"[{request_id}] About to make API call to OpenAI using images.generate - model: gpt-image-1")
             response = client.images.generate(
-                model="dall-e-3", # Using DALL-E 3 for text-to-image generation
+                model="gpt-image-1", # Using GPT Image model for improved image generation
                 prompt=full_prompt, # Use the combined prompt
                 n=1, # Number of images to generate
                 size="1024x1024", # Specify a supported size
-                quality="hd",
-                style="vivid" # More photorealistic style
+                quality="medium",
+                background='transparent'
             )
         else:
             # Use the images.edit endpoint when images are provided
             print(f"Calling OpenAI images.edit with 'gpt-image-1'.{style_info} Number of images: {len(image_bytes_list)}")
             print(f"Image bytes list contains {len(image_bytes_list)} images")
-            for i, img_bytes in enumerate(image_bytes_list):
-                print(f"  Image {i+1} - Size: {img_bytes.getbuffer().nbytes} bytes, Name: {getattr(img_bytes, 'name', 'unnamed')}")
             
-            print("About to make API call to OpenAI using images.edit...")
+            # Detailed image logging
+            image_details = []
+            for i, img_bytes in enumerate(image_bytes_list):
+                size_bytes = img_bytes.getbuffer().nbytes
+                name = getattr(img_bytes, 'name', 'unnamed')
+                print(f"  Image {i+1} - Size: {size_bytes} bytes, Name: {name}")
+                image_details.append({"index": i+1, "size_bytes": size_bytes, "name": name})
+            
+            logger.info(f"[{request_id}] About to make API call to OpenAI using images.edit - model: gpt-image-1")
+            logger.info(f"[{request_id}] Image details: {json.dumps(image_details)}")
+            
             response = client.images.edit(
                 model="gpt-image-1", # As specified by user
                 image=image_bytes_list, # List of image byte streams
                 prompt=full_prompt, # Use the combined prompt
                 n=1, # Number of images to generate
                 size="1024x1024", # Specify a supported size
-                quality="high",
+                quality="medium",
                 background='transparent'
             )
+        
+        logger.info(f"[{request_id}] API call to OpenAI completed successfully")
         print("API call to OpenAI completed successfully")
 
         # print(f"Full OpenAI API response object: {response}")
@@ -194,17 +221,25 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
             return None
 
     except openai.APIConnectionError as e:
+        logger.error(f"OpenAI API request failed to connect: {e}")
         print(f"OpenAI API request failed to connect: {e}")
         return {"style": modifier_title if modifier_title else "Standard", "success": False, "error": str(e)}
+            
     except openai.RateLimitError as e:
+        logger.error(f"OpenAI API request exceeded rate limit: {e}")
         print(f"OpenAI API request exceeded rate limit: {e}")
         return {"style": modifier_title if modifier_title else "Standard", "success": False, "error": str(e)}
+            
     except openai.APIStatusError as e:
+        logger.error(f"OpenAI API returned an API Error: {e.status_code} - {e.response}")
         print(f"OpenAI API returned an API Error: {e.status_code} - {e.response}")
+        
         error_message = ""
         try:
             error_details = e.response.json() # Attempt to parse JSON response
+            logger.debug(f"Error details (JSON): {error_details}")
             print(f"Error details (JSON): {error_details}")
+            
             # Extract more specific error information if available
             if isinstance(error_details, dict):
                 if 'error' in error_details:
@@ -214,51 +249,90 @@ def _generate_single_image(prompt_text: str, input_images_data: List[Dict], prom
                         error_code = error_obj.get('code', 'unknown')
                         error_param = error_obj.get('param', 'unknown')
                         error_msg = error_obj.get('message', 'No specific message')
+                        logger.debug(f"Detailed error info - Type: {error_type}, Code: {error_code}, Param: {error_param}, Message: {error_msg}")
                         print(f"Detailed error info - Type: {error_type}, Code: {error_code}, Param: {error_param}, Message: {error_msg}")
+                        
+                        # Special handling for 500 errors
+                        if e.status_code == 500:
+                            logger.warning(f"Server error detected. Diagnostic information:\n" + 
+                                          f"  - Request ID: {request_id}\n" +
+                                          f"  - Error type: {error_type}\n" +
+                                          f"  - Server message: {error_msg}\n" +
+                                          f"  - Prompt length: {prompt_length} chars\n" +
+                                          f"  - Image count: {len(image_bytes_list)}\n" +
+                                          f"  - Total image bytes: {total_bytes}\n")
             error_message = str(error_details)
         except Exception as json_e:
+            logger.error(f"Could not parse error response as JSON: {json_e}")
             print(f"Could not parse error response as JSON: {json_e}")
             error_text = e.response.text if hasattr(e.response, 'text') else 'No text attribute'
+            logger.debug(f"Raw error response text: {error_text}")
             print(f"Raw error response text: {error_text}")
             error_message = error_text
 
         # Check for specific error conditions
         if e.status_code == 404 and "model_not_found" in str(e.response).lower():
+            logger.error("Error: The model 'gpt-image-1' was not found. Please ensure it's available for your API key and correctly named.")
             print("Error: The model 'gpt-image-1' was not found. Please ensure it's available for your API key and correctly named.")
         elif e.status_code == 400:
+            logger.error(f"Error: Invalid request (400). This could be due to incorrect parameters for 'gpt-image-1', image format issues, or other input problems.")
             print(f"Error: Invalid request (400). This could be due to incorrect parameters for 'gpt-image-1', image format issues, or other input problems.")
             # Check for common image-related errors
             if "invalid_image" in str(e.response).lower():
+                logger.error("The error appears to be related to invalid image format or content.")
                 print("The error appears to be related to invalid image format or content.")
             elif "content_policy_violation" in str(e.response).lower():
+                logger.error("The error appears to be related to content policy violation.")
                 print("The error appears to be related to content policy violation.")
         elif e.status_code == 429:
+            logger.error("Error: Rate limit exceeded. You may need to wait before making more requests.")
             print("Error: Rate limit exceeded. You may need to wait before making more requests.")
+        elif e.status_code == 500:
+            logger.error(f"Error: OpenAI server error (500). This is an issue on OpenAI's side.")
+            print(f"Error: OpenAI server error (500). This is an issue on OpenAI's side.")
+            print(f"This appears to be a temporary issue with OpenAI's servers.")
+            print(f"Request details: Style: {modifier_title or 'Standard'}, Images: {len(image_bytes_list)}, Prompt length: {prompt_length}")
         
         return {"style": modifier_title if modifier_title else "Standard", "success": False, "error": error_message}
+        
     except Exception as e:
+        # Handle other exceptions
+        logger.error(f"An unexpected error occurred: {e}")
         print(f"An unexpected error occurred: {e}")
         import traceback
+        logger.error(traceback.format_exc())
         traceback.print_exc()
         return {"style": modifier_title if modifier_title else "Standard", "success": False, "error": str(e)}
 
 
-def _generate_multiple_variations(prompt_text: str, input_images_data: List[Dict]) -> List[Dict[str, Any]]:
+def _generate_multiple_variations(prompt_text: str, input_images_data: List[Dict], max_concurrent_requests=5) -> List[Dict[str, Any]]:
     """
     Generate multiple image variations with different prompt modifiers in parallel.
-    
+{{ ... }}
     Args:
         prompt_text: The user's prompt text
         input_images_data: List of image data dictionaries
+        max_concurrent_requests: Maximum number of concurrent API requests to make
         
     Returns:
         List of dictionaries with image data for each variation
     """
+    results = []
+
+    # Implement a semaphore to limit concurrent API requests
+    import threading
+    request_semaphore = threading.Semaphore(max_concurrent_requests)
+
+    # Function to acquire semaphore before making API request and release after
+    def limited_api_request(prompt_text, input_images_data, modifier):
+        with request_semaphore:
+            return _generate_single_image(prompt_text, input_images_data, modifier)
+
     if not PROMPT_MODIFIERS:
         print("No prompt modifiers found. Falling back to single image generation.")
         result = _generate_single_image(prompt_text, input_images_data)
         return [result] if result else []
-    
+
     results = []
     max_workers = min(5, len(PROMPT_MODIFIERS))  # Limit to 5 concurrent requests
     print(f"Generating {len(PROMPT_MODIFIERS)} design variations in parallel...")
@@ -302,9 +376,37 @@ def _generate_multiple_variations(prompt_text: str, input_images_data: List[Dict
     
     # If all designs failed, log a more detailed error
     if len([r for r in results if r.get('success', False)]) == 0:
+        logger.critical("All design variations failed to generate!")
         print("CRITICAL ERROR: All design variations failed to generate!")
+        
+        # Check for pattern of failures
+        server_errors = 0
+        rate_limit_errors = 0
+        other_errors = 0
         for i, result in enumerate(results):
-            print(f"  Failure {i+1} - Style: {result.get('style', 'Unknown')}, Error: {result.get('error', 'Unknown error')}")
+            error_str = str(result.get('error', 'Unknown error'))
+            print(f"  Failure {i+1} - Style: {result.get('style', 'Unknown')}, Error: {error_str}")
+            
+            if "server_error" in error_str.lower() or "500" in error_str:
+                server_errors += 1
+            elif "rate_limit" in error_str.lower() or "429" in error_str:
+                rate_limit_errors += 1
+            else:
+                other_errors += 1
+        
+        # Provide aggregate error statistics and suggestions
+        logger.error(f"Error breakdown - Server errors: {server_errors}, Rate limit: {rate_limit_errors}, Other: {other_errors}")
+        if server_errors > 0:
+            print(f"\nDetected {server_errors} server errors (500). This indicates an issue on OpenAI's side.")
+            print("Suggestion: Wait a few minutes and try again later.")
+        if rate_limit_errors > 0:
+            print(f"\nDetected {rate_limit_errors} rate limit errors. You may be sending too many requests.")
+            print("Suggestion: Reduce the number of parallel requests or add delays between requests.")
+        if len(image_bytes_list) > 0:
+            total_image_size = sum([img.getbuffer().nbytes for img in image_bytes_list])
+            print(f"\nTotal image size: {total_image_size/1024/1024:.2f} MB across {len(image_bytes_list)} images")
+            if total_image_size > 15 * 1024 * 1024:  # 15 MB threshold
+                print("Images may be too large. Try resizing images to be smaller.")
     
     return results
 

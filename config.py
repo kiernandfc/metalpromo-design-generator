@@ -53,6 +53,7 @@ ZOHO_CLIENT_SECRET = get_credential("ZOHO_CLIENT_SECRET")
 ZOHO_REFRESH_TOKEN = get_credential("ZOHO_REFRESH_TOKEN")
 ZOHO_API_BASE_URL = get_credential("ZOHO_API_BASE_URL", "https://www.zohoapis.com")
 ZOHO_TOKEN_URL = get_credential("ZOHO_TOKEN_URL", "https://accounts.zoho.com/oauth/v2/token")
+ZOHO_WORKDRIVE_API_URL = get_credential("ZOHO_WORKDRIVE_API_URL", "https://workdrive.zoho.com/api/v1")
 
 if __name__ == "__main__":
     # Test the credential loading
